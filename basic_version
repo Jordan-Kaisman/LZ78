@@ -81,12 +81,12 @@ class LZ78DecoderDictionary:
 
 class LZ78Encoder:
     """
-    Processes data using an LZ78EncodeDictionary 
+    Processes data using an LZ78EncoderDictionary 
     """
 
     def __init__(self, max_size=4096):
         self.max_size = max_size
-        self.dictionary = LZ78EncodeDictionary(max_size)
+        self.dictionary = LZ78EncoderDictionary(max_size)
 
     def encode(self, data: bytearray):
         """
@@ -138,7 +138,7 @@ class LZ78Decoder:
 
     def __init__(self, max_size=4096):
         self.max_size = max_size
-        self.dictionary = LZ78DecodeDictionary(max_size)
+        self.dictionary = LZ78DecoderDictionary(max_size)
     
     def decode(self, tuples, length):
         """
