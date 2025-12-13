@@ -1,5 +1,5 @@
 """
-LZW Compression with LRU Prune Strategy
+LZW Compression with Flush Strategy
 
 Dictionary Structure: Trie (Prefix Tree)
 -Phrases represented as (parent_index, next_char) tuples
@@ -16,7 +16,7 @@ Encoder Output Stream:
 -The parent phrase is already in the dictionary and is being extended by next_char. 
 
 
-LRU Prune Strategy
+Flush Strategy
 -Once dictionary reaches max size, clear it and start from scratch
 """
 
