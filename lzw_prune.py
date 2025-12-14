@@ -130,13 +130,10 @@ class LZWEncoderDictionary(LZWDictionaryBase):
     def insert(self, parent_index, next_char):
         """Prune if full, then add (parent_index, next_char) to dictionary"""
         if self.full:
-            self.prune()
             idx = self.free_index
         else:
             idx = self.next_index
             self.next_index += 1
-            if self.next_index == self.max_size:
-                self.full = True
 
         self.dictionary[(parent_index, next_char)] = idx
         self.parent[idx] = parent_index
@@ -146,8 +143,14 @@ class LZWEncoderDictionary(LZWDictionaryBase):
         # If parent was a leaf in DLL, remove it (no longer a leaf)
         if self.child_count[parent_index] == 1 and parent_index >= 256:
             self.dll_remove(parent_index)
-
         self.dll_insert_head(idx)
+
+        if self.next_index == self.max_size:
+            # Newly full
+            self.full = True
+
+        if self.full:
+            self.prune() #preprune  
 
 
 class LZWDecoderDictionary(LZWDictionaryBase):
@@ -157,11 +160,6 @@ class LZWDecoderDictionary(LZWDictionaryBase):
     Uses parent/char arrays to reconstruct phrases by walking up the tree
     Codes 0-255 are implicit single-byte entries
     """
-
-    def get_following_index(self):
-        if self.full:
-            return self.tail
-        return self.next_index
 
     def prune(self):
         target_index = self.tail
@@ -184,13 +182,10 @@ class LZWDecoderDictionary(LZWDictionaryBase):
     def insert(self, parent_index, next_char):
         """Prune if full, then add entry"""
         if self.full:
-            self.prune()
             idx = self.free_index
         else:
             idx = self.next_index
             self.next_index += 1
-            if self.next_index == self.max_size:
-                self.full = True
 
         self.parent[idx] = parent_index
         self.char[idx] = next_char
@@ -199,8 +194,14 @@ class LZWDecoderDictionary(LZWDictionaryBase):
         # If parent was a leaf in DLL, remove it (no longer a leaf)
         if self.child_count[parent_index] == 1 and parent_index >= 256:
             self.dll_remove(parent_index)
-
         self.dll_insert_head(idx)
+
+        if self.next_index == self.max_size:
+            # Newly full
+            self.full = True
+
+        if self.full:
+            self.prune() #preprune  
 
     def unravel_phrase(self, index):
         """
@@ -302,7 +303,7 @@ class LZWDecoder:
 
         for pointer in pointers[1:]:
             # KwKwK special case: need to anticipate next index to be added
-            if pointer == self.dictionary.get_following_index():
+            if pointer >= 256 and self.dictionary.parent[pointer] == -1:
                 phrase = prev_phrase + prev_phrase[:1]
             else:
                 phrase = self.dictionary.unravel_phrase(pointer)
@@ -373,6 +374,3 @@ class LZWPruneDecoder(DataDecoder):
         with EncodedBlockReader(encoded_file_path) as reader:
             with Uint8FileDataStream(output_file_path, "wb") as fds:
                 self.decode(reader, fds)
-
-
-

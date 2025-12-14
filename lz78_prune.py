@@ -144,46 +144,7 @@ class DictionaryBase:
 
 
 class LZ78EncoderDictionary(DictionaryBase):
-    """
-    Three Components
-    -Core Dict: hash (parent_index, character) -> child_index
-    -DLL of Leaves: 
-    -Auxiliary Arrays:  
 
-    
-    Leaves: Doubly Linked List 
-    For efficient pruning, we introduce 5 arrays, all indexed by child_index.
-
-    DLL Pointers: instead of explicit node objects, we use arrays of pointers. The data (leaf ID) is 
-    implicit in the index.
-    -prev: dictionary index of previous leaf
-    -next: dictionary index of next leaf
-
-    Auxiliary Arrays: also indexed by child_index.
-    -parent: parent_index of leaf
-    -char: terminal character of leaf
-    -child_count: number of children
-
-    Motivation for Auxiliary Arrays
-    A node/phrase can be identified either by its index or by a (parent_index, next_char) tuple. 
-    When pruning a leaf we will need to access its parent. This is trivial using tuples, but 
-    inefficient using indices (must scan dictionary). So we cannot use indices alone to identify nodes.
-    However, if we separately store the reverse map child_index -> (parent_index, next_char) then indices 
-    actually can be used. This reverse map can be stored as an array of tuples, or alternatively as 
-    a pair of arrays for the componentwise maps. Now that nodes can be identified by indices, we can similarly 
-    use arrays for an implicit representation. This avoids the overhead of explicit node objects. Even though 
-    we have added two auxiliary arrays, this produces a substantial reduction in memory usage.
-
-    Function Interpretation
-    Note that the node data (parent, char) is unique, so we can view nodes as functions 
-    (parent, char) -> (prev, next). Because of the bijection (parent, char) <-> index, we can also view 
-    nodes as functions index -> (prev, next).
-    ===================================================================
-    DLL Operations
-    -Insert: new leaf added to the front. If parent was a leaf, remove it.
-    -Remove: lru leaf removed from tail. If parent is now a leaf, add it to tail.
-    ===================================================================
-    """
 
     def __init__(self, max_size=4096):
         """
@@ -198,6 +159,7 @@ class LZ78EncoderDictionary(DictionaryBase):
         return self.dictionary.get((parent_index, next_char))
 
     def prune(self):
+
         target_index = self.tail
         parent_index = self.parent[target_index]
         char = self.char[target_index]
@@ -219,22 +181,34 @@ class LZ78EncoderDictionary(DictionaryBase):
 
     def insert(self, parent_index, next_char):
         """
-        Prune if full, then (parent_index, next_char) to dictionary
+        Prune if full, then add (parent_index, next_char) to dictionary
+
+        Preprune
+        -Edge Case: lru leaf is parent of incoming node
+        -If full, prune before insert to avoid edge case
+        -Effectively using max_size - 1 entries
         """
         if self.full is True:
-            self.prune()
             idx = self.free_index
         else:
             idx = self.next_index
             self.next_index += 1
-            if self.next_index == self.max_size:
-                self.full = True
         
         self.dictionary[(parent_index, next_char)] = idx
         self.parent[idx] = parent_index
         self.char[idx] = next_char
         self.child_count[parent_index] += 1
+        if self.child_count[parent_index] == 1 and parent_index != 0:
+            # Parent was a leaf, remove from DLL
+            self.dll_remove(parent_index)
         self.dll_insert_head(idx)
+
+        if self.next_index == self.max_size:
+            # Newly full
+            self.full = True
+
+        if self.full:
+            self.prune() #preprune
 
 
 
@@ -249,6 +223,7 @@ class LZ78DecoderDictionary(DictionaryBase):
     """
  
     def prune(self):
+
         target_index = self.tail
         parent_index = self.parent[target_index]
 
@@ -269,18 +244,25 @@ class LZ78DecoderDictionary(DictionaryBase):
 
     def insert(self, parent_index, next_char):
         if self.full is True:
-            self.prune()
             idx = self.free_index
         else:
             idx = self.next_index
             self.next_index += 1
-            if self.next_index == self.max_size:
-                self.full = True
         
         self.parent[idx] = parent_index
         self.char[idx] = next_char
         self.child_count[parent_index] += 1
+        if self.child_count[parent_index] == 1 and parent_index != 0:
+            # Parent was a leaf, remove from DLL
+            self.dll_remove(parent_index)
         self.dll_insert_head(idx)
+
+        if self.next_index == self.max_size:
+            # Newly full
+            self.full = True
+
+        if self.full:
+            self.prune() #preprune
         
     
     def unravel_phrase(self, index):
